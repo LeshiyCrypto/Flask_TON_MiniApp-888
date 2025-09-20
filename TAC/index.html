@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TAC Staking</title>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 20px; }
+    h1 { font-size: 28px; }
+    .btn {
+      display: inline-block;
+      margin: 8px;
+      padding: 12px 20px;
+      font-size: 16px;
+      border-radius: 12px;
+      border: none;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    .btn:hover { background: #45a049; }
+    .card {
+      background: #f4f4f4;
+      border-radius: 12px;
+      padding: 10px;
+      margin: 15px auto;
+      width: 80%;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    input { text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>💎 TAC Staking</h1>
+
+  <div class="card">
+    <p>💰 Баланс: <b><span id="balance">0</span> TAC</b></p>
+    <p>📈 Стейкинг: <b><span id="stake">0</span>%</b> / макс 3%</p>
+    <p>👥 Рефералов: <b><span id="refs">0</span></b> (для вывода ≥ 3)</p>
+  </div>
+
+  <div class="card">
+    <p>🔗 Ваша реферальная ссылка:</p>
+    <input id="refLink" style="width:80%;padding:5px;" readonly>
+    <button class="btn" onclick="copyRef()">📋 Скопировать</button>
+  </div>
+
+  <h3>1️⃣ Оплата</h3>
+  <button class="btn" onclick="pay(0.01)">Оплатить 0.01 TON</button>
+  <button class="btn" onclick="pay(0.5)">Оплатить 0.5 TAC</button>
+
+  <h3>2️⃣ Баланс</h3>
+  <button class="btn" style="background:#2196F3;" onclick="deposit()">💰 Пополнить</button>
+  <button class="btn" style="background:#f44336;" onclick="withdraw()">📤 Вывести</button>
+
+  <script>
+    let userId = window.Telegram.WebApp.initDataUnsafe.user.id;
+    let adminWallet = "UQAOuF1i8-tschnGBa6vniXCw6cglCh9k215TS4KQ4KIIij0";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const startParam = urlParams.get("start");
+    let ref = null;
+    if (startParam && startParam.startsWith("ref_")) {
+      ref = startParam.replace("ref_", "");
+    }
+
+    async function loadProfile() {
+      let r = await fetch(`/api/profile?userId=${userId}`);
+      let data = await r.json();
+      if (data.success) {
+        document.getElementById("balance").innerText = data.balance.toFixed(2);
+        document.getElementById("stake").innerText = data.stakePercent.toFixed(2);
+        document.getElementById("refs").innerText = data.refs;
+        document.getElementById("refLink").value =
+          `https://t.me/${"TAC_ton_05_bot"}?start=ref_${userId}`;
+      }
+    }
+
+    function copyRef() {
+      let link = document.getElementById("refLink");
+      link.select();
+      link.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(link.value);
+      alert("Ссылка скопирована!");
+    }
+
+    fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, ref })
+    }).then(loadProfile);
+
+    async function pay(amount) {
+      let wallet = prompt("Введите ваш TON кошелек:");
+      if (!wallet) return alert("Кошелек обязателен!");
+
+      let deeplink = `ton://transfer/${adminWallet}?amount=${Math.floor(amount * 1e9)}`;
+      if (confirm(`Откроется Tonkeeper для оплаты ${amount} TON`)) {
+        window.open(deeplink, "_blank");
+      }
+
+      setTimeout(async () => {
+        let r = await fetch("/api/task", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, wallet, amount })
+        });
+        let data = await r.json();
+        alert(data.message);
+        await loadProfile();
+      }, 15000);
+    }
+
+    async function deposit() {
+      let amount = parseFloat(prompt("Введите сумму пополнения:"));
+      await fetch("/api/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, amount })
+      });
+      alert("Баланс пополнен!");
+      await loadProfile();
+    }
+
+    async function withdraw() {
+      let wallet = prompt("Введите ваш TON кошелек:");
+      let r = await fetch("/api/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, wallet })
+      });
+      let data = await r.json();
+      alert(data.message);
+      await loadProfile();
+    }
+  </script>
+</body>
+</html>
